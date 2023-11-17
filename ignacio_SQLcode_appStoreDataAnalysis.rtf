@@ -1,0 +1,185 @@
+{\rtf1\ansi\ansicpg1252\cocoartf2709
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fswiss\fcharset0 Helvetica;}
+{\colortbl;\red255\green255\blue255;}
+{\*\expandedcolortbl;;}
+\margl1440\margr1440\vieww11520\viewh8400\viewkind0
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
+
+\f0\fs24 \cf0 CREATE TABLE appleStore_description_combined AS\
+\
+SELECT * FROM appleStore_description1\
+UNION ALL\
+\
+SELECT * FROM appleStore_description2\
+UNION ALL\
+\
+SELECT * FROM appleStore_description3\
+UNION ALL\
+\
+SELECT * FROM appleStore_description4\
+\
+**EXPLORATORY DATA ANALYSIS**\
+\
+--check the number of unique apps in data table\
+\
+SELECT DISTINCT COUNT(id) AS UniqueAppIDs\
+FROM AppleStore\
+\
+SELECT DISTINCT COUNT(id) AS UniqueAppIDs\
+FROM appleStore_description_combined\
+--same number, 7197\
+\
+\
+--check for missing values in key fieldsAppleStore\
+\
+SELECT COUNT(*) AS missingValues\
+FROM AppleStore\
+WHERE track_name is NULL or user_rating is NULL or prime_genre IS NULL OR price IS NULL\
+\
+SELECT COUNT(*) AS missingValues\
+FROM appleStore_description_combined\
+WHERE app_desc is NULL\
+--no missing values\
+\
+\
+--find out the number of apps per genre in AppleStore\
+\
+SELECT prime_genre, COUNT(*) AS numApps\
+FROM AppleStore\
+GROUP BY prime_genre\
+ORDER BY numApps DESC\
+--games(3862), entertainment(535), and education(453) clearly lead all categories\
+\
+\
+--get overview of app ratings (min, max, avg)\
+\
+SELECT min(user_rating) as minRating, max(user_rating) as maxRating, avg(user_rating) as avgRating\
+From AppleStore\
+--minRating(0), avgRating(3.527), maxRating(5)\
+\
+\
+--get distribution of app prices, $2 range\
+\
+SELECT \
+	(price / 2) * 2 AS priceBinStart,\
+    ((price / 2) * 2) + 2 as priceBinEnd,\
+    COUNT(*) as numApps\
+From AppleStore\
+GROUP By priceBinStart\
+-- over 4,000 apps fall between $0-$2\
+\
+**DATA ANALYSIS**\
+\
+--do paid apps have higher ratings than free apps?\
+\
+SELECT CASE\
+			WHEN price > 0 then 'Paid'\
+            Else 'Free'\
+         end as appType,\
+         avg(user_rating) as avgUserRating\
+FROM AppleStore\
+GROUP BY appType\
+--free app rating(3.3777), paid app rating(3.7209)\
+\
+\
+--do apps that support more languages have higher ratings?\
+\
+SELECT CASE\
+			WHEN lang_num < 10 then '<10 languages'\
+            WHEN lang_num BETWEEN 10 and 30 then '10-30 languages'\
+            else '>30 languages'\
+         end as lang_bucket,\
+         avg(user_rating) as avgUserRating\
+FROM AppleStore\
+GROUP BY lang_bucket\
+order by avgUserRating DESC\
+--apps with 10-30 languages(4.1305), apps with less than 10 languages (3.3683), apps with more than 30 languages (3.7777)\
+\
+\
+--check genres with low ratings\
+\
+SELECT prime_genre, avg(user_rating) as avgUserRating\
+From AppleStore\
+group by prime_genre\
+order by avgUserRating ASC\
+-- catalogs, finance, book, navigation, lifestyle, news, sports, all have low average ratings. this means there may be opportunity to build a good app in these spaces\
+\
+--check genres with high ratings\
+\
+SELECT prime_genre, avg(user_rating) as avgUserRating\
+From AppleStore\
+group by prime_genre\
+order by avgUserRating DESC\
+-- productivity, music, photo/video, health/fitness, games have fairly high ratings. these genres are more competitive\
+\
+\
+\
+--is there correlation between description length and user rating?\
+\
+Select CASE\
+			when B.app_desc < 400 then 'Short'\
+            When B.app_desc BETWEEN 400 and 900 then 'Medium'\
+            Else 'Long'\
+         end as app_desc_bucket,\
+         avg(a.user_rating) as avgUserRating\
+FROM AppleStore as A\
+JOIN\
+	appleStore_description_combined as B\
+ON\
+	A.id = B.id\
+    \
+group by app_desc_bucket\
+order by avgUserRating desc\
+--medium length has best average ratings(4.0333)\
+\
+\
+--top-rated apps for each genres\
+\
+select \
+	prime_genre,\
+    track_name,\
+    user_rating\
+FROM (\
+	SELECT \
+    	prime_genre,\
+    	track_name,\
+   	 	user_rating,\
+    	RANK () OVER (PARTITION BY prime_genre ORDER BY user_rating DESC, rating_count_tot DESC) as rank\
+    FROM AppleStore\
+    ) as A\
+WHERE\
+A.rank = 1\
+--gives best rated apps in every genre\
+\
+\
+--check if there is correlation between app size and ratings\
+--convert bytes to megabytes\
+ALTER TABLE AppleStore\
+ADD column bytesMB FLOAT\
+\
+UPDATE AppleStore\
+SET bytesMB = size_bytes/100000\
+--find min, avg, max size of apps in MB, find avg user ratings for each size app\
+SELECT min(bytesMB) as minMB, avg(bytesMB) as avgMB, max(bytesMB) as maxMB,\
+CASE\
+	when bytesMB < 200 then 'smallApp'\
+    WHEN bytesMB between 200 and 1000 then 'mediumApp'\
+    else 'largeApp'\
+    end as app_bucket,\
+    avg(user_rating) as avgUserRating\
+FROM AppleStore\
+GROUP BY app_bucket\
+ORDER BY avgUserRating\
+--large apps have the highest avg rating with 3.7767, then medium at 3.4, then small at 2.8241\
+\
+\
+\
+**FINDINGS**\
+-- paid apps have better ratings than free apps\
+-- apps that support 10-30 languages have higher ratings\
+-- categories like finance, catalogs, books, navigation, lifestyle all have low avg ratings. opportunity in these areas?\
+-- categories like games, health/fitness, productivity, music all have high avg ratings. more competitive areas\
+-- little correlation between app description length and ratings, but medium length had best ratings\
+-- larger apps have higher ratings\
+-- average rating is around 3.5\
+}
